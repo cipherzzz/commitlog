@@ -5,12 +5,13 @@ import (
 	"os"
 	"testing"
 
-	api "github.com/cipherzzz/commitlog/api/v1"
 	"github.com/stretchr/testify/require"
+
+	api "github.com/cipherzzz/commitlog/api/v1"
 )
 
 func TestSegment(t *testing.T) {
-	dir, _ := os.MkdirTemp("", "segment_test")
+	dir, _ := os.MkdirTemp("", "segment-test")
 	defer os.RemoveAll(dir)
 
 	want := &api.Record{Value: []byte("hello world")}
@@ -19,13 +20,11 @@ func TestSegment(t *testing.T) {
 	c.Segment.MaxStoreBytes = 1024
 	c.Segment.MaxIndexBytes = entWidth * 3
 
-	// Create a new segment.
 	s, err := newSegment(dir, 16, c)
 	require.NoError(t, err)
-	require.Equal(t, uint64(16), s.nextOffset)
+	require.Equal(t, uint64(16), s.nextOffset, s.nextOffset)
 	require.False(t, s.IsMaxed())
 
-	// Append to the segment.
 	for i := uint64(0); i < 3; i++ {
 		off, err := s.Append(want)
 		require.NoError(t, err)
@@ -36,16 +35,18 @@ func TestSegment(t *testing.T) {
 		require.Equal(t, want.Value, got.Value)
 	}
 
-	// The segment is now maxed.
-	require.True(t, s.IsMaxed())
-
 	_, err = s.Append(want)
 	require.Equal(t, io.EOF, err)
 
-	// Here we verify that the segment is maxed with bytes storage
-	// before we checked for index items max
-	c.Segment.MaxIndexBytes = 1024
+	// maxed index
+	require.True(t, s.IsMaxed())
+
 	c.Segment.MaxStoreBytes = uint64(len(want.Value) * 3)
+	c.Segment.MaxIndexBytes = 1024
+
+	s, err = newSegment(dir, 16, c)
+	require.NoError(t, err)
+	// maxed store
 	require.True(t, s.IsMaxed())
 
 	err = s.Remove()

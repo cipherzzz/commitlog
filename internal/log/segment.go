@@ -5,8 +5,9 @@ import (
 	"os"
 	"path"
 
-	api "github.com/cipherzzz/commitlog/api/v1"
 	"google.golang.org/protobuf/proto"
+
+	api "github.com/cipherzzz/commitlog/api/v1"
 )
 
 type segment struct {
@@ -16,47 +17,39 @@ type segment struct {
 	config                 Config
 }
 
-// newSegment creates a new segment and opens the store and index files.
-// It loads the index from disk if it exists.
-// The baseOffset is the offset of the first message in the segment.
-// The config is used to configure the segment.
-func newSegment(dir string, baseOffset uint64, config Config) (*segment, error) {
+func newSegment(dir string, baseOffset uint64, c Config) (*segment, error) {
 	s := &segment{
 		baseOffset: baseOffset,
-		config:     config,
+		config:     c,
 	}
-
-	// Open the store and index files.
-
-	// The store file is opened in read-write mode so that we can append to it.
 	var err error
-	storeFile, err := os.OpenFile(path.Join(dir, fmt.Sprintf("%d%s", baseOffset, ".store")), os.O_RDWR|os.O_CREATE, 0644)
+	storeFile, err := os.OpenFile(
+		path.Join(dir, fmt.Sprintf("%d%s", baseOffset, ".store")),
+		os.O_RDWR|os.O_CREATE|os.O_APPEND,
+		0644,
+	)
 	if err != nil {
 		return nil, err
 	}
-
 	if s.store, err = newStore(storeFile); err != nil {
 		return nil, err
 	}
-
-	indexFile, err := os.OpenFile(path.Join(dir, fmt.Sprintf("%d%s", baseOffset, ".index")), os.O_RDWR|os.O_CREATE, 0644)
+	indexFile, err := os.OpenFile(
+		path.Join(dir, fmt.Sprintf("%d%s", baseOffset, ".index")),
+		os.O_RDWR|os.O_CREATE,
+		0644,
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	if s.index, err = newIndex(indexFile, config); err != nil {
+	if s.index, err = newIndex(indexFile, c); err != nil {
 		return nil, err
 	}
-
 	if off, _, err := s.index.Read(-1); err != nil {
 		s.nextOffset = baseOffset
-		// log off
-		fmt.Println("off", off)
 	} else {
-		fmt.Println("off", off)
-		s.nextOffset = baseOffset + uint64(off)
+		s.nextOffset = baseOffset + uint64(off) + 1
 	}
-
 	return s, nil
 }
 
@@ -71,15 +64,19 @@ func (s *segment) Append(record *api.Record) (offset uint64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	if err = s.index.Write(uint32(cur-s.baseOffset), pos); err != nil {
+	if err = s.index.Write(
+		// index offsets are relative to base offset
+		uint32(s.nextOffset-uint64(s.baseOffset)),
+		pos,
+	); err != nil {
 		return 0, err
 	}
 	s.nextOffset++
 	return cur, nil
 }
 
-func (s *segment) Read(offset uint64) (*api.Record, error) {
-	_, pos, err := s.index.Read(int64(offset - s.baseOffset))
+func (s *segment) Read(off uint64) (*api.Record, error) {
+	_, pos, err := s.index.Read(int64(off - s.baseOffset))
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +90,18 @@ func (s *segment) Read(offset uint64) (*api.Record, error) {
 }
 
 func (s *segment) IsMaxed() bool {
-	return s.store.size >= s.config.Segment.MaxStoreBytes || s.index.size >= s.config.Segment.MaxIndexBytes
+	return s.store.size >= s.config.Segment.MaxStoreBytes ||
+		s.index.size >= s.config.Segment.MaxIndexBytes
+}
+
+func (s *segment) Close() error {
+	if err := s.index.Close(); err != nil {
+		return err
+	}
+	if err := s.store.Close(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *segment) Remove() error {
@@ -109,16 +117,10 @@ func (s *segment) Remove() error {
 	return nil
 }
 
-func (s *segment) Close() error {
-	if err := s.index.Close(); err != nil {
-		return err
-	}
-	if err := s.store.Close(); err != nil {
-		return err
-	}
-	return nil
-}
-
 func nearestMultiple(j, k uint64) uint64 {
+	if j >= 0 {
+		return (j / k) * k
+	}
 	return ((j - k + 1) / k) * k
+
 }
