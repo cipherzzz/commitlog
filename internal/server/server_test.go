@@ -35,6 +35,16 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
+	// Test if fails with a different signing CA
+	differentCA := false
+	clientCert := config.ClientCertFile
+	clientKey := config.ClientKeyFile
+	if differentCA {
+		clientCert = config.FalseClientCertFile
+		clientKey = config.FalseClientKeyFile
+	}
+
+	// Test if fails with an insecure client
 	insecureClient := false
 	var cc *grpc.ClientConn
 	if insecureClient {
@@ -42,7 +52,9 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 		require.NoError(t, err)
 	} else {
 		clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
-			CAFile: config.CAFile})
+			CertFile: clientCert,
+			KeyFile:  clientKey,
+			CAFile:   config.CAFile})
 		require.NoError(t, err)
 
 		clientCreds := credentials.NewTLS(clientTLSConfig)
@@ -58,6 +70,7 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 		KeyFile:       config.ServerKeyFile,
 		CAFile:        config.CAFile,
 		ServerAddress: l.Addr().String(),
+		Server:        true,
 	})
 	require.NoError(t, err)
 	serverCreds := credentials.NewTLS(serverTLSConfig)

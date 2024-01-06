@@ -7,6 +7,7 @@ init:
 .PHONY: gencert
 gencert:
 	cfssl gencert -initca test/ca-csr.json | cfssljson -bare ca
+	cfssl gencert -initca test/false-ca-csr.json | cfssljson -bare false-ca
 
 	cfssl gencert \
 		-ca=ca.pem \
@@ -14,6 +15,20 @@ gencert:
 		-config=test/ca-config.json \
 		-profile=server \
 		test/server-csr.json | cfssljson -bare server
+
+	cfssl gencert \
+		-ca=ca.pem \
+		-ca-key=ca-key.pem \
+		-config=test/ca-config.json \
+		-profile=client \
+		test/client-csr.json | cfssljson -bare client	
+
+	cfssl gencert \
+		-ca=false-ca.pem \
+		-ca-key=false-ca-key.pem \
+		-config=test/ca-config.json \
+		-profile=client \
+		test/client-csr.json | cfssljson -bare false-client	
 
 	mv 	*.pem *.csr ${CONFIG_PATH}
 
