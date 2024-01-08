@@ -1,5 +1,8 @@
 {
     "CN": "nobody",
+    "hosts": [
+        ""
+    ],
     "key": {
         "algo": "rsa",
         "size": 2048
@@ -10,7 +13,7 @@
             "L": "ON",
             "ST": "Toronto",
             "O": "My Awesome Company",
-            "OU": "CA Services"
+            "OU": "Distributed Services"
         }
     ]
 }
