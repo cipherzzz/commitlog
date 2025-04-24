@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	api "github.com/cipherzzz/commitlog/api/v1"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -43,6 +45,7 @@ type CommitLog interface {
 type Config struct {
 	CommitLog  CommitLog
 	Authorizer Authorizer
+	LogFile    string
 }
 
 var _ api.LogServer = (*grpcServer)(nil)
@@ -53,14 +56,41 @@ type grpcServer struct {
 }
 
 func NewGRPCServer(config *Config, opts ...grpc.ServerOption) (*grpc.Server, error) {
-	logger := zap.L().Named("server")
+	var logger *zap.Logger
+	var err error
+
+	if config.LogFile != "" {
+		// Create a file sink
+		file, err := os.OpenFile(config.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open log file: %w", err)
+		}
+		defer file.Close()
+
+		// Create a development config
+		zapConfig := zap.NewDevelopmentConfig()
+		zapConfig.OutputPaths = []string{config.LogFile}
+		zapConfig.ErrorOutputPaths = []string{config.LogFile}
+
+		logger, err = zapConfig.Build()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create logger: %w", err)
+		}
+	} else {
+		// Default to development logger if no file specified
+		logger, err = zap.NewDevelopment()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create logger: %w", err)
+		}
+	}
+
 	zapOpts := []grpc_zap.Option{
 		grpc_zap.WithDurationField(func(duration time.Duration) zapcore.Field {
 			return zap.Int64("grpc.time_ns", duration.Nanoseconds())
 		}),
 	}
 	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-	err := view.Register(ocgrpc.DefaultServerViews...)
+	err = view.Register(ocgrpc.DefaultServerViews...)
 	if err != nil {
 		return nil, err
 	}

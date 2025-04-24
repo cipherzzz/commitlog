@@ -57,6 +57,11 @@ func setupTest(t *testing.T, fn func(*Config)) (rootClient api.LogClient, nobody
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
+	// Create a temporary log file
+	logFile, err := ioutil.TempFile("", "server-test-*.log")
+	require.NoError(t, err)
+	t.Logf("log file: %s", logFile.Name())
+
 	newClient := func(crtPath, keypath string, insecureClient, differentCA bool) (*grpc.ClientConn, api.LogClient, []grpc.DialOption) {
 
 		// Test if fails with an insecure client
@@ -130,6 +135,7 @@ func setupTest(t *testing.T, fn func(*Config)) (rootClient api.LogClient, nobody
 	cfg = &Config{
 		CommitLog:  clog,
 		Authorizer: authorizer,
+		LogFile:    logFile.Name(),
 	}
 	if fn != nil {
 		fn(cfg)
@@ -153,6 +159,7 @@ func setupTest(t *testing.T, fn func(*Config)) (rootClient api.LogClient, nobody
 			telemetryExporter.Close()
 		}
 		clog.Remove()
+		os.Remove(logFile.Name())
 	}
 
 }
