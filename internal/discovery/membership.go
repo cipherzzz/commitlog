@@ -76,6 +76,7 @@ func (m *Membership) eventHandler() {
 				if m.isLocal(member) {
 					continue
 				}
+				m.logger.Info("member joined", zap.String("name", member.Name), zap.String("addr", member.Tags["rpc_addr"]))
 				m.handleJoin(member)
 			}
 		case serf.EventMemberLeave, serf.EventMemberFailed:
@@ -83,6 +84,7 @@ func (m *Membership) eventHandler() {
 				if m.isLocal(member) {
 					continue
 				}
+				m.logger.Info("member left", zap.String("name", member.Name), zap.String("addr", member.Tags["rpc_addr"]))
 				m.handleLeave(member)
 			}
 		}
